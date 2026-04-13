@@ -46,6 +46,29 @@ class TripCollection:
         """Sets the destination at the given index to visited=True."""
         self._trips[index].visited = True
 
+    def total_budget(self) -> float:
+        """Returns sum of budget for all trips. Returns 0.0 if empty."""
+        return sum(t.budget for t in self._trips) if self._trips else 0.0
+
+    def average_budget(self) -> float:
+        """Returns average budget. Returns 0.0 if empty."""
+        return self.total_budget() / len(self._trips) if self._trips else 0.0
+
+    def top_country(self) -> str:
+        """Returns the country name that appears most often in the collection.
+        Returns 'No trips yet' if empty."""
+        if not self._trips:
+            return "No trips yet"
+        counts = self.count_by_country()
+        return max(counts, key=counts.get)
+
+    def count_by_country(self) -> dict[str, int]:
+        """Returns a dict mapping country name -> number of trips to that country."""
+        counts = {}
+        for t in self._trips:
+            counts[t.country] = counts.get(t.country, 0) + 1
+        return counts
+
     def __len__(self) -> int:
         """Returns the number of destinations in the collection."""
         return len(self._trips)

@@ -6,19 +6,22 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.models import Destination, TripCollection
 from src.storage import load_trips, save_trips
+from src.ai_assistant import ask, TRAVEL_SYSTEM_PROMPT, generate_trip_briefing
 
 def main():
     collection = load_trips()
 
     while True:
         print("\n=== Trip Notes ===")
+        print("\n-- Data --")
         print("[1] Add destination")
-        print("[2] View all destinations")
-        print("[3] Search by country")
-        print("[4] Add note to a destination")
-        print("[5] Quit")
-        print("[6] Mark as Visited")
-        print("[7] Wishlist / Visited")
+        print("[2] List all destinations")
+        print("[3] Mark as visited")
+        print("[4] Show statistics")
+        print("\n-- AI --")
+        print("[6] Ask AI a travel question")
+        print("[7] Trip Briefing")
+        print("\n[Q] Quit")
 
         choice = input("Select an option: ")
 
@@ -45,38 +48,6 @@ def main():
                         print(f"   Notes: {', '.join(trip.notes)}")
 
         elif choice == "3":
-            country = input("Enter country to search: ")
-            results = collection.search_by_country(country)
-            if not results:
-                print(f"No trips found in {country}.")
-            else:
-                for trip in results:
-                    status = "Visited" if trip.visited else "Wishlist"
-                    print(f"- {trip.name} - Budget: ${trip.budget:.2f} [{status}]")
-
-        elif choice == "4":
-            if len(collection) == 0:
-                print("No trips to add notes to.")
-                continue
-            
-            for i, trip in enumerate(collection.get_all(), 1):
-                print(f"{i}. {trip.name}")
-            
-            try:
-                idx = int(input("Select trip number to add note: "))
-                trip = collection.get_by_index(idx - 1)
-                note = input("Enter note: ")
-                trip.add_note(note)
-                save_trips(collection)
-                print("Note added!")
-            except (ValueError, IndexError):
-                print("Invalid selection.")
-
-        elif choice == "5":
-            print("Goodbye!")
-            break
-
-        elif choice == "6":
             if len(collection) == 0:
                 print("No trips to mark.")
                 continue
@@ -93,17 +64,80 @@ def main():
             except (ValueError, IndexError):
                 print("Invalid selection.")
 
+        elif choice == "4":
+            if len(collection) == 0:
+                print("No trips saved yet.")
+            else:
+                print("\n=== Trip Statistics ===")
+                print(f"Total trips: {len(collection)}")
+                print(f"Total budget: ${collection.total_budget():.2f}")
+                print(f"Average budget: ${collection.average_budget():.2f}")
+                counts = collection.count_by_country()
+                top_c = collection.top_country()
+                print(f"Top country: {top_c} ({counts.get(top_c, 0)} trips)")
+                print("Trips by country:")
+                for country, count in counts.items():
+                    print(f"  {country}: {count}")
+
+        elif choice == "6":
+            question = input("Your question: ")
+            response = ask(question, system_prompt=TRAVEL_SYSTEM_PROMPT)
+            if response is None:
+                print("Error: Could not get a response from the AI.")
+                continue
+            
+            print(f"\nAI Response:\n{response}")
+            
+            save_note = input("\nSave this as a note on a trip? (y/n): ").lower()
+            if save_note == "y":
+                if len(collection) == 0:
+                    print("No trips saved yet.")
+                else:
+                    for i, trip in enumerate(collection.get_all(), 1):
+                        print(f"{i}. {trip.name}")
+                    
+                    try:
+                        idx = int(input("Trip number: "))
+                        trip = collection.get_by_index(idx - 1)
+                        trip.add_note(response)
+                        save_trips(collection)
+                        print(f"Saved as a note on {trip.name}.")
+                    except (ValueError, IndexError):
+                        print("Invalid selection.")
+
         elif choice == "7":
-            wishlist = collection.get_wishlist()
-            visited = collection.get_visited()
+            destinations = collection.get_all()
+            if not destinations:
+                print("No trips saved yet.")
+                continue
             
-            print(f"\nWishlist ({len(wishlist)}):")
-            for trip in wishlist:
-                print(f"- {trip.name} ({trip.country})")
+            print("\nSelect a trip for briefing:")
+            for i, dest in enumerate(destinations, 1):
+                print(f"  [{i}] {dest.name}, {dest.country}")
             
-            print(f"\nVisited ({len(visited)}):")
-            for trip in visited:
-                print(f"- {trip.name} ({trip.country})")
+            try:
+                idx = int(input("Select trip number: "))
+                if not (1 <= idx <= len(destinations)):
+                    print("Invalid selection.")
+                    continue
+                
+                dest = destinations[idx - 1]
+                print(f"Generating briefing for {dest.name}...")
+                result = generate_trip_briefing(dest.name, dest.country, dest.notes)
+                
+                if result is None:
+                    print("Briefing failed. Check your API connection.")
+                    continue
+                
+                print(f"\n--- {dest.name} Briefing ---")
+                print(f"Overview:\n{result['overview']}")
+                print(f"\nPacking List:\n{result['packing_list']}")
+            except ValueError:
+                print("Invalid input. Please enter a number.")
+
+        elif choice.lower() == "q":
+            print("Goodbye!")
+            break
 
         else:
             print("Invalid option, try again.")
