@@ -3,6 +3,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import json
 import urllib.request
 from src.rag import search_guides, ensure_index
+from src.ai_assistant import client, MODEL
 
 def budget_breakdown(destination: str, days: int, budget_usd: float) -> str:
     """
@@ -98,6 +99,55 @@ TOOL_DEFINITIONS = [
         }
     }
 ]
+
+def run_agent(user_question: str) -> str:
+    """
+    Main loop for the travel planning agent.
+    """
+    messages = [
+        {"role": "system", "content": "You are a travel planning agent. Use the available tools to help users plan trips. Always use a tool if it can answer the question more accurately — especially for real-time data or guide content."},
+        {"role": "user", "content": user_question}
+    ]
+
+    for _ in range(5):
+        response = client.chat.completions.create(
+            model=MODEL,
+            messages=messages,
+            tools=TOOL_DEFINITIONS,
+            tool_choice="auto",
+            max_tokens=1024,
+            timeout=30,
+        )
+        msg = response.choices[0].message
+        
+        if not msg.tool_calls:
+            return msg.content
+
+        messages.append(msg)
+
+        for tc in msg.tool_calls:
+            name = tc.function.name
+            args = json.loads(tc.function.arguments)
+            print(f"[Tool call] {name}({args})")
+            
+            if name == "budget_breakdown":
+                result = budget_breakdown(**args)
+            elif name == "get_weather":
+                result = get_weather(**args)
+            elif name == "search_guides_tool":
+                result = search_guides_tool(**args)
+            else:
+                result = f"Unknown tool: {name}"
+            
+            print(f"[Tool result] {result[:120]}...")
+            
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tc.id,
+                "content": result
+            })
+
+    return "Agent reached maximum iterations."
 
 if __name__ == "__main__":
     print("--- Testing budget_breakdown ---")
