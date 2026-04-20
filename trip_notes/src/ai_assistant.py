@@ -3,6 +3,7 @@ import sys
 from dotenv import load_dotenv, find_dotenv
 import openai
 from openai import OpenAI
+from src.rag import search_guides
 
 # Find and load the .env file (searching upwards from trip_notes/)
 load_dotenv(find_dotenv())
@@ -51,6 +52,29 @@ def ask(user_message, system_prompt=None, temperature=0.7, max_tokens=1024):
             openai.APIConnectionError, openai.APITimeoutError) as e:
         print(f"API Error: {e}")
         return None
+
+
+def rag_ask(question: str) -> str:
+    """
+    Search the user's travel guides and answer using the retrieved context.
+    """
+    chunks = search_guides(question, n_results=3)
+    if not chunks:
+        return "No guides found. Add .txt, .md, or .pdf files to guides/ and press [R] to rebuild the index."
+
+    context = "\n\n---\n\n".join(chunks)
+    rag_system_prompt = (
+        "You are a travel assistant with access to the user's personal travel guides. "
+        "Use the context below as your PRIMARY source. If the context contains relevant "
+        "information, use it in your answer. If the context is insufficient, you may "
+        "supplement with general knowledge but clearly indicate what comes from the guides "
+        "and what is general advice. If the context has nothing relevant at all, say: "
+        "I don't have specific guide information about that.\n\n"
+        "Context from your travel guides:\n"
+        f"{context}"
+    )
+
+    return ask(question, system_prompt=rag_system_prompt, max_tokens=2048)
 
 def generate_trip_briefing(city: str, country: str, notes: list = None) -> dict:
     """

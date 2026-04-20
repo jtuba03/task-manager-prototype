@@ -6,7 +6,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.models import Destination, TripCollection
 from src.storage import load_trips, save_trips
-from src.ai_assistant import ask, TRAVEL_SYSTEM_PROMPT, generate_trip_briefing
+from src.ai_assistant import ask, TRAVEL_SYSTEM_PROMPT, generate_trip_briefing, rag_ask
+from src.rag import build_index
 
 def main():
     collection = load_trips()
@@ -21,7 +22,9 @@ def main():
         print("\n-- AI --")
         print("[6] Ask AI a travel question")
         print("[7] Trip Briefing")
-        print("\n[Q] Quit")
+        print("[8] Search my guides")
+        print("\n[R] Rebuild search index")
+        print("[Q] Quit")
 
         choice = input("Select an option: ")
 
@@ -134,6 +137,19 @@ def main():
                 print(f"\nPacking List:\n{result['packing_list']}")
             except ValueError:
                 print("Invalid input. Please enter a number.")
+
+        elif choice == "8":
+            question = input("Your question: ")
+            response = rag_ask(question)
+            if response is None:
+                print("Error: Could not get a response from the AI.")
+                continue
+            print(f"\nAI Response:\n{response}")
+
+        elif choice.lower() == "r":
+            print("Rebuilding index from guides/..." )
+            build_index(force=True)
+            print("Done. Use [8] to search your updated guides.")
 
         elif choice.lower() == "q":
             print("Goodbye!")
