@@ -9,6 +9,7 @@ import streamlit as st
 from src.storage import load_trips
 from src.ai_assistant import ask, TRAVEL_SYSTEM_PROMPT, client, MODEL, rag_ask
 from src.rag import ensure_index
+from src.tools import run_agent, TOOL_DEFINITIONS
 
 MAX_TURNS = 8
 
@@ -142,7 +143,42 @@ def main() -> None:
             st.rerun()
 
     with agent_tab:
-        st.info("Coming soon — Exercise 4")
+        st.subheader("AI Travel Agent")
+        st.caption("The agent uses tools: budget calculation, live weather, and guide search.")
+
+        agent_input = st.text_area(
+            "Your question",
+            placeholder="e.g. I have $1200 for 8 days in Tokyo. Check the weather and break down my budget.",
+            key="agent_input",
+            height=150,
+        )
+
+        answer = None
+        if st.button("Ask the Agent") and agent_input.strip():
+            st.session_state["agent_history"].append({"question": agent_input.strip(), "answer": ""})
+            with st.spinner("Agent is working..."):
+                answer = run_agent(agent_input.strip())
+            if answer is None:
+                answer = "Agent did not return a response."
+            st.session_state["agent_history"][-1]["answer"] = answer
+
+        if answer is not None:
+            st.markdown(answer)
+
+        with st.expander("Tools available to this agent"):
+            for tool in TOOL_DEFINITIONS:
+                tool_name = tool.get("function", {}).get("name")
+                if tool_name:
+                    st.write(f"- {tool_name}")
+
+        st.markdown("---")
+        st.markdown("### Previous queries this session:")
+        for entry in reversed(st.session_state["agent_history"]):
+            question = entry.get("question", "")
+            answer_text = entry.get("answer", "")
+            label = question if len(question) <= 60 else question[:57] + "..."
+            with st.expander(label):
+                st.markdown(answer_text)
 
 
 if __name__ == "__main__":
