@@ -7,7 +7,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import streamlit as st
 
 from src.storage import load_trips
-from src.ai_assistant import ask, TRAVEL_SYSTEM_PROMPT
+from src.ai_assistant import ask, TRAVEL_SYSTEM_PROMPT, client, MODEL
+
+MAX_TURNS = 8
 
 
 def init_session_state() -> None:
@@ -83,7 +85,36 @@ def main() -> None:
     chat_tab, search_tab, agent_tab = st.tabs(["💬 Chat", "🔍 Search", "🤖 Agent"])
 
     with chat_tab:
-        st.info("Coming soon — Exercise 2")
+        st.subheader("Atlas — Your Travel AI")
+        st.caption("Ask me anything about travel.")
+
+        for message in st.session_state["chat_history"]:
+            with st.chat_message(message["role"]):
+                st.write(message["content"])
+
+        user_input = st.chat_input("Ask Atlas anything...")
+        if user_input:
+            st.session_state["chat_history"].append({"role": "user", "content": user_input})
+            trimmed_history = st.session_state["chat_history"][-(MAX_TURNS * 2):]
+            messages = [
+                {"role": "system", "content": TRAVEL_SYSTEM_PROMPT},
+                *trimmed_history,
+            ]
+            with st.spinner("Atlas is thinking..."):
+                response = client.chat.completions.create(
+                    model=MODEL,
+                    messages=messages,
+                )
+            assistant_content = response.choices[0].message.content
+            if assistant_content is None:
+                assistant_content = ""
+            st.session_state["chat_history"].append({"role": "assistant", "content": assistant_content})
+            with st.chat_message("assistant"):
+                st.write(assistant_content)
+
+        if st.button("Clear chat", key="clear_chat"):
+            st.session_state["chat_history"] = []
+            st.rerun()
 
     with search_tab:
         st.info("Coming soon — Exercise 3")
